@@ -17,7 +17,7 @@ public sealed class AppOptions
 public sealed class ClaudeOptions
 {
     public string FallbackModel { get; set; } = "claude-haiku-4-5";
-    public int MaxTokens { get; set; } = 3000;
+    public int MaxTokens { get; set; } = 8000;
     public int MaxToolRounds { get; set; } = 4;
 }
 

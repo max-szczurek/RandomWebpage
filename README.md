@@ -26,7 +26,7 @@ While the page is being generated, a loading spinner is shown.
 | `ClaudeApiKey` | Yes | Your Anthropic API key. The app will not start without it. |
 | `WebsitePurpose` | Yes | The prompt describing what kind of site to generate. A placeholder default is in `appsettings.json`. |
 | `Claude:FallbackModel` | No | Model used if the latest Haiku model can't be looked up. Default `claude-haiku-4-5`. |
-| `Claude:MaxTokens` | No | Maximum response length. Default `3000`. |
+| `Claude:MaxTokens` | No | Maximum response length, including any tokens the model spends thinking. Too low a value cuts the page off before its footer. Default `8000`. |
 | `Claude:MaxToolRounds` | No | How many times Claude may call tools before it must write the page. Default `4`. |
 | `Palette:SampleCount` | No | Number of colors `sample_image_colors` returns when Claude does not ask for a count. Default `8`. |
 | `Images:MaxBytes` | No | Largest image `get_image_from_url` will download. Default `5000000`. |
@@ -50,7 +50,7 @@ Environment variables with the same names override user secrets and `appsettings
 ```powershell
 $env:ClaudeApiKey = "sk-ant-..."
 $env:WebsitePurpose = "A museum of lost socks."
-$env:Claude__MaxTokens = "4000"
+$env:Claude__MaxTokens = "10000"
 ```
 ## Running
 ```powershell
