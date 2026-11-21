@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.Extensions.Options;
 using RandomWebpage;
 using RandomWebpage.Services;
 
@@ -11,15 +12,21 @@ builder.Services
     .Validate(o => !string.IsNullOrWhiteSpace(o.ClaudeApiKey),
         "ClaudeApiKey is not configured. Set it via user secrets or the ClaudeApiKey environment variable.")
     .Validate(o => !string.IsNullOrWhiteSpace(o.WebsitePurpose), "WebsitePurpose is not configured.")
+    .Validate(o => o.Traffic.PerIpPermitLimit > 0, "Traffic:PerIpPermitLimit must be greater than 0.")
+    .Validate(o => o.Traffic.PerIpWindowMinutes is > 0 and <= 1440, "Traffic:PerIpWindowMinutes must be from 1 to 1440.")
+    .Validate(o => o.Traffic.PerIpConcurrency > 0, "Traffic:PerIpConcurrency must be greater than 0.")
+    .Validate(o => o.Traffic.GlobalPermitLimit > 0, "Traffic:GlobalPermitLimit must be greater than 0.")
+    .Validate(o => o.Traffic.GlobalWindowMinutes is > 0 and <= 1440, "Traffic:GlobalWindowMinutes must be from 1 to 1440.")
     .ValidateOnStart();
 
 builder.Services.AddMemoryCache();
+builder.Services.AddRateLimiter(TrafficLimits.Configure);
 
 builder.Services.AddHttpClient<PicsumImageService>(c => c.Timeout = TimeSpan.FromSeconds(15));
 
 builder.Services.AddHttpClient<ClaudeClient>((sp, c) =>
 {
-    var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AppOptions>>().Value;
+    var opts = sp.GetRequiredService<IOptions<AppOptions>>().Value;
     c.BaseAddress = new Uri("https://api.anthropic.com/");
     c.Timeout = TimeSpan.FromMinutes(2);
     c.DefaultRequestHeaders.Add("x-api-key", opts.ClaudeApiKey);
@@ -32,7 +39,27 @@ builder.Services.AddTransient<PageGenerator>();
 
 var app = builder.Build();
 
+var traffic = app.Services.GetRequiredService<IOptions<AppOptions>>().Value.Traffic;
+app.Logger.LogInformation(
+    "Page generation limits: {PerIpConcurrency} at a time and {PerIpPermitLimit} per {PerIpWindowMinutes} min for each IP, {GlobalPermitLimit} per {GlobalWindowMinutes} min for the whole site",
+    traffic.PerIpConcurrency,
+    traffic.PerIpPermitLimit,
+    traffic.PerIpWindowMinutes,
+    traffic.GlobalPermitLimit,
+    traffic.GlobalWindowMinutes);
+
+// Reject crawlers before the rate limiter, so a bot does not consume a visitor's budget or a Claude call.
+app.Use(CrawlerFilter.Invoke);
+app.UseRateLimiter();
+
 app.MapGet("/", LoadingPage.Render);
+
+app.MapGet("/robots.txt", async (HttpContext context) =>
+{
+    context.Response.Headers.CacheControl = "public, max-age=86400";
+    context.Response.ContentType = "text/plain; charset=utf-8";
+    await context.Response.WriteAsync(RobotsTxt.Body);
+});
 
 app.MapGet("/generate", async (
     PicsumImageService picsum,

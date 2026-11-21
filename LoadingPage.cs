@@ -13,12 +13,24 @@ public static class LoadingPage
 
     public static IResult Render(HttpContext context)
     {
-        var nonce = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
+        context.Response.Headers.CacheControl = "no-store";
 
+        // No script, so a crawler that ignores robots.txt never requests /generate.
+        if (CrawlerFilter.IsKnownCrawler(context.Request.Headers.UserAgent))
+        {
+            context.Response.Headers.ContentSecurityPolicy =
+                "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src 'none'; base-uri 'none'; form-action 'none'";
+            return Results.Content(
+                SimplePage.Render(
+                    "Browsers only",
+                    "Open this site in a browser. It builds a new page for each visit, and each page calls a paid API, so automated clients are turned away."),
+                "text/html; charset=utf-8");
+        }
+
+        var nonce = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
         context.Response.Headers.ContentSecurityPolicy =
             $"default-src 'none'; script-src 'nonce-{nonce}'; connect-src 'self'; img-src {ImageSources}; " +
             "style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'";
-        context.Response.Headers.CacheControl = "no-store";
 
         var html = $$"""
             <!DOCTYPE html>
@@ -26,6 +38,7 @@ public static class LoadingPage
             <head>
               <meta charset="utf-8">
               <meta name="viewport" content="width=device-width, initial-scale=1">
+              <meta name="robots" content="noindex, nofollow, noarchive">
               <title>Generating a random website...</title>
               <style>
                 html, body { height: 100%; margin: 0; }
