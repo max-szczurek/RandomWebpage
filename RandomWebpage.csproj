@@ -8,6 +8,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="RandomWebpage.Tests/**" />
+    <EmbeddedResource Remove="RandomWebpage.Tests/**" />
+    <Content Remove="RandomWebpage.Tests/**" />
+    <None Remove="RandomWebpage.Tests/**" />
+    <InternalsVisibleTo Include="RandomWebpage.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="SkiaSharp" Version="4.157.0" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.157.0" />
   </ItemGroup>
