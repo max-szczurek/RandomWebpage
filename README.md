@@ -1,5 +1,8 @@
 # RandomWebpage
 A .NET 10 web app that builds a brand-new website every time you load it.
+
+**Live site:** [https://cassave.ai/](https://cassave.ai/)
+
 On each visit the server:
 1. Fetches a random 300x200 photo from [picsum.photos](https://picsum.photos).
 2. Samples random pixels from it to build a color palette.
