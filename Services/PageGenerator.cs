@@ -58,6 +58,11 @@ public sealed partial class PageGenerator(
 
             if (!reply.WantsTools)
             {
+                if (reply.StopReason == "max_tokens")
+                    logger.LogWarning(
+                        "Claude hit the {MaxTokens} token limit, so the page is cut off. Thinking tokens count toward this limit; raise Claude:MaxTokens.",
+                        options.Value.Claude.MaxTokens);
+
                 try
                 {
                     return new GeneratedPage(Clean(reply.Text), tools.ImageUrls);
