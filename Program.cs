@@ -17,12 +17,30 @@ builder.Services
     .Validate(o => o.Traffic.PerIpConcurrency > 0, "Traffic:PerIpConcurrency must be greater than 0.")
     .Validate(o => o.Traffic.GlobalPermitLimit > 0, "Traffic:GlobalPermitLimit must be greater than 0.")
     .Validate(o => o.Traffic.GlobalWindowMinutes is > 0 and <= 1440, "Traffic:GlobalWindowMinutes must be from 1 to 1440.")
+    .Validate(o => o.Claude.MaxToolRounds is >= 0 and <= 10, "Claude:MaxToolRounds must be from 0 to 10.")
+    .Validate(o => o.Images.MaxBytes > 0, "Images:MaxBytes must be greater than 0.")
+    .Validate(o => o.Images.TimeoutSeconds is > 0 and <= 120, "Images:TimeoutSeconds must be from 1 to 120.")
+    .Validate(o => o.Images.MaxPerPage > 0, "Images:MaxPerPage must be greater than 0.")
+    .Validate(o => o.Images.CacheMinutes is >= 0 and <= 1440, "Images:CacheMinutes must be from 0 to 1440.")
+    .Validate(o => o.Images.CacheMaxBytes > 0, "Images:CacheMaxBytes must be greater than 0.")
     .ValidateOnStart();
 
 builder.Services.AddMemoryCache();
 builder.Services.AddRateLimiter(TrafficLimits.Configure);
 
 builder.Services.AddHttpClient<PicsumImageService>(c => c.Timeout = TimeSpan.FromSeconds(15));
+
+builder.Services
+    .AddHttpClient<UrlImageService>((sp, c) =>
+        c.Timeout = TimeSpan.FromSeconds(sp.GetRequiredService<IOptions<AppOptions>>().Value.Images.TimeoutSeconds))
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+    {
+        // Redirects are followed by UrlImageService so every hop is re-validated, and DNS results are
+        // checked in the connect callback, so no proxy may sit in between.
+        AllowAutoRedirect = false,
+        UseProxy = false,
+        ConnectCallback = UrlImageService.ConnectToPublicHostAsync
+    });
 
 builder.Services.AddHttpClient<ClaudeClient>((sp, c) =>
 {
@@ -33,9 +51,11 @@ builder.Services.AddHttpClient<ClaudeClient>((sp, c) =>
     c.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
 });
 
+builder.Services.AddSingleton<ImageCache>();
 builder.Services.AddSingleton<PaletteService>();
 builder.Services.AddTransient<ClaudeModelResolver>();
-builder.Services.AddTransient<PageGenerator>();
+builder.Services.AddScoped<WebsiteTools>();
+builder.Services.AddScoped<PageGenerator>();
 
 var app = builder.Build();
 
@@ -62,27 +82,21 @@ app.MapGet("/robots.txt", async (HttpContext context) =>
 });
 
 app.MapGet("/generate", async (
-    PicsumImageService picsum,
-    PaletteService paletteService,
     PageGenerator generator,
     ILogger<Program> logger,
     HttpContext context,
     CancellationToken ct) =>
 {
-    // Generated HTML is served as-is, so lock it down: no scripts, images only from picsum.
-    context.Response.Headers.ContentSecurityPolicy =
-        $"default-src 'none'; script-src 'none'; img-src {LoadingPage.ImageSources}; " +
-        "style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'";
+    // Generated HTML is served as-is, so lock it down: no scripts, and images only from the hosts the
+    // image tools actually returned for this page. Replaced below once the page is generated.
+    context.Response.Headers.ContentSecurityPolicy = GeneratedPagePolicy.Build([]);
     context.Response.Headers.CacheControl = "no-store";
 
     try
     {
-        var image = await picsum.GetRandomImageAsync(ct);
-        var palette = paletteService.BuildPalette(image.Bytes);
-        logger.LogInformation("Image {Url}, palette {Palette}", image.ImageUrl, string.Join(' ', palette));
-
-        var html = await generator.GenerateAsync(image.ImageUrl, palette, ct);
-        return Results.Content(html, "text/html; charset=utf-8");
+        var page = await generator.GenerateAsync(ct);
+        context.Response.Headers.ContentSecurityPolicy = GeneratedPagePolicy.Build(page.ImageUrls);
+        return Results.Content(page.Html, "text/html; charset=utf-8");
     }
     catch (OperationCanceledException) when (ct.IsCancellationRequested)
     {
