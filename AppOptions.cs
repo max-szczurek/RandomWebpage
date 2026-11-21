@@ -10,6 +10,7 @@ public sealed class AppOptions
     public string WebsitePurpose { get; set; } = "";
     public ClaudeOptions Claude { get; set; } = new();
     public PaletteOptions Palette { get; set; } = new();
+    public TrafficOptions Traffic { get; set; } = new();
 }
 
 public sealed class ClaudeOptions
@@ -21,4 +22,13 @@ public sealed class ClaudeOptions
 public sealed class PaletteOptions
 {
     public int SampleCount { get; set; } = 8;
+}
+
+public sealed class TrafficOptions
+{
+    public int PerIpPermitLimit { get; set; } = 20;
+    public int PerIpWindowMinutes { get; set; } = 10;
+    public int PerIpConcurrency { get; set; } = 2;
+    public int GlobalPermitLimit { get; set; } = 120;
+    public int GlobalWindowMinutes { get; set; } = 60;
 }
