@@ -11,7 +11,7 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
-      - run: dotnet publish RandomWebpage/RandomWebpage.csproj -c Release -o publish
+      - run: dotnet publish RandomWebpage.csproj -c Release -o publish
       - uses: azure/webapps-deploy@v3
         with:
           app-name: your-app-name
