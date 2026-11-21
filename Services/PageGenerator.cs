@@ -57,7 +57,18 @@ public sealed partial class PageGenerator(
             var reply = await claude.CreateMessageAsync(model, SystemPrompt, messages, definitions, forbidTools: lastChance, ct);
 
             if (!reply.WantsTools)
-                return new GeneratedPage(Clean(reply.Text), tools.ImageUrls);
+            {
+                try
+                {
+                    return new GeneratedPage(Clean(reply.Text), tools.ImageUrls);
+                }
+                catch (InvalidOperationException)
+                {
+                    var preview = reply.Text.Length > 300 ? reply.Text[..300] : reply.Text;
+                    logger.LogWarning("Claude stopped with {StopReason} and returned no HTML. Start of reply: {Preview}", reply.StopReason, preview);
+                    throw;
+                }
+            }
 
             if (lastChance)
                 throw new InvalidOperationException("Claude kept requesting tools after tool use was disabled.");
