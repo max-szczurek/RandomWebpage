@@ -71,6 +71,22 @@ public class UrlImageServiceTests
     }
 
     [Fact]
+    public async Task Sends_a_user_agent_because_some_hosts_reject_requests_without_one()
+    {
+        string? seen = null;
+        var handler = new StubHandler(r =>
+        {
+            seen = r.Headers.UserAgent.ToString();
+            return TestSupport.ImageResponse(TestSupport.Png(SKColors.Red));
+        });
+        var service = new UrlImageService(TestSupport.Client(handler), TestSupport.Options());
+
+        await service.GetImageAsync("https://example.com/a.png");
+
+        Assert.StartsWith("RandomWebpage/", seen);
+    }
+
+    [Fact]
     public async Task Follows_redirects_and_reports_the_final_url()
     {
         var png = TestSupport.Png(SKColors.Blue);

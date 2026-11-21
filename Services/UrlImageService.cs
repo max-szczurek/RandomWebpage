@@ -38,6 +38,7 @@ public sealed class UrlImageService(HttpClient http, IOptions<AppOptions> option
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, current);
             request.Headers.Accept.ParseAdd("image/*");
+            request.Headers.UserAgent.ParseAdd("RandomWebpage/1.0 (image fetch tool)");
 
             HttpResponseMessage response;
             try
