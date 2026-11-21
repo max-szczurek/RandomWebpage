@@ -23,15 +23,20 @@ public static class ImageProbe
 /// <summary>
 /// Downloads an image from a URL given in the website purpose. The URL is untrusted input as far as the
 /// network is concerned, so only public https hosts are allowed, redirects are re-checked hop by hop, and
-/// the body is size-limited and must decode as an image.
+/// the body is size-limited and must decode as an image. Only images that pass every check are cached, so a
+/// refused URL or a transient failure is retried on the next visit.
 /// </summary>
-public sealed class UrlImageService(HttpClient http, IOptions<AppOptions> options)
+public sealed class UrlImageService(HttpClient http, IOptions<AppOptions> options, ImageCache? cache = null)
 {
     private const int MaxRedirects = 3;
 
     public async Task<FetchedImage> GetImageAsync(string url, CancellationToken ct = default)
     {
         var current = ParseHttpsUrl(url);
+        var cacheKey = current.AbsoluteUri;
+        if (cache is not null && cache.TryGet(cacheKey, out var cached))
+            return cached;
+
         var maxBytes = options.Value.Images.MaxBytes;
 
         for (var hop = 0; hop <= MaxRedirects; hop++)
@@ -78,7 +83,9 @@ public sealed class UrlImageService(HttpClient http, IOptions<AppOptions> option
                 var size = ImageProbe.TryGetSize(bytes)
                     ?? throw new ImageFetchException("The downloaded file is not an image format that can be read (try JPEG, PNG, GIF or WebP).");
 
-                return new FetchedImage(bytes, current, size.Width, size.Height);
+                var image = new FetchedImage(bytes, current, size.Width, size.Height);
+                cache?.Set(cacheKey, image);
+                return image;
             }
         }
 

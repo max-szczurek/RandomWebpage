@@ -21,6 +21,8 @@ builder.Services
     .Validate(o => o.Images.MaxBytes > 0, "Images:MaxBytes must be greater than 0.")
     .Validate(o => o.Images.TimeoutSeconds is > 0 and <= 120, "Images:TimeoutSeconds must be from 1 to 120.")
     .Validate(o => o.Images.MaxPerPage > 0, "Images:MaxPerPage must be greater than 0.")
+    .Validate(o => o.Images.CacheMinutes is >= 0 and <= 1440, "Images:CacheMinutes must be from 0 to 1440.")
+    .Validate(o => o.Images.CacheMaxBytes > 0, "Images:CacheMaxBytes must be greater than 0.")
     .ValidateOnStart();
 
 builder.Services.AddMemoryCache();
@@ -49,6 +51,7 @@ builder.Services.AddHttpClient<ClaudeClient>((sp, c) =>
     c.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
 });
 
+builder.Services.AddSingleton<ImageCache>();
 builder.Services.AddSingleton<PaletteService>();
 builder.Services.AddTransient<ClaudeModelResolver>();
 builder.Services.AddScoped<WebsiteTools>();

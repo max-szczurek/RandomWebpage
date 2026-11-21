@@ -32,6 +32,8 @@ While the page is being generated, a loading spinner is shown.
 | `Images:MaxBytes` | No | Largest image `get_image_from_url` will download. Default `5000000`. |
 | `Images:TimeoutSeconds` | No | Time limit for downloading one image from a URL. Default `10`. |
 | `Images:MaxPerPage` | No | How many images one page may fetch. Default `3`. |
+| `Images:CacheMinutes` | No | How long a downloaded image, and the palette sampled from an image, are kept in memory. `0` turns caching off. Default `60`. |
+| `Images:CacheMaxBytes` | No | Total size of images kept in the cache. Default `50000000`. |
 | `Traffic:PerIpPermitLimit` | No | Page generations allowed for one IP address in the window below. Default `20`. |
 | `Traffic:PerIpWindowMinutes` | No | Length of that per-IP window, in minutes. Default `10`. |
 | `Traffic:PerIpConcurrency` | No | How many generations one IP address may have in flight at once. Default `2`. |
@@ -67,6 +69,7 @@ Key files in `RandomWebpage/`:
 - `Services/WebsiteTools.cs` defines the three tools, keeps the downloaded images on the server for one page (Claude only sees an image id, URL, and size), and records which image URLs were handed out.
 - `Services/PicsumImageService.cs` downloads the random image and records its final URL, so the page shows the same image that was sampled.
 - `Services/UrlImageService.cs` downloads an image from a URL in the purpose, with the safety checks described below.
+- `Services/ImageCache.cs` keeps downloaded images in memory, so a purpose that names the same URL does not download it on every visit.
 - `Services/PaletteService.cs` samples about 200 random pixels with SkiaSharp, groups similar colors, returns the most common distinct ones as hex codes, and suggests background, text, and accent colors.
 - `Services/ClaudeModelResolver.cs` looks up the newest Haiku model from the Anthropic models API and caches the result for 12 hours.
 - `Services/ClaudeClient.cs` calls the Anthropic Messages API, including tool definitions and tool results.
@@ -77,7 +80,9 @@ Tests are in `RandomWebpage.Tests/`. Run them with `dotnet test`.
 ## Security notes
 The generated HTML is served as-is, so a Content-Security-Policy restricts what it can do. Scripts are blocked, except the loading page's own script, which is allowed through a per-request nonce. Images can only come from the hosts of images the tools downloaded for that page: the policy is built per response, so a page that fetched no image can load none.
 
-The `get_image_from_url` tool fetches a URL from the server, so it is restricted. Only `https://` URLs are accepted, and so are redirects to `https://`, at most 3 of them. The hostname is resolved by the app, and a host that resolves to a loopback, private, link-local (including cloud metadata addresses such as `169.254.169.254`), or other non-public address is refused before any connection is made. The response must be an `image/*` type no larger than `Images:MaxBytes`, and it must decode as an image. A refused URL is reported back to Claude as a tool error, so the page is still generated. Because the browser loads a downloaded image straight from its host, that host sees the visitor's request.
+The `get_image_from_url` tool fetches a URL from the server, so it is restricted. Only `https://` URLs are accepted, and so are redirects to `https://`, at most 3 of them. The hostname is resolved by the app, and a host that resolves to a loopback, private, link-local (including cloud metadata addresses such as `169.254.169.254`), or other non-public address is refused before any connection is made. The response must be an `image/*` type no larger than `Images:MaxBytes`, and it must decode as an image. A refused URL is reported back to Claude as a tool error, so the page is still generated.
+
+Images from `get_image_from_url` are cached by URL for `Images:CacheMinutes`, within a total budget of `Images:CacheMaxBytes`, and only after they pass every check above. The sampled palette is cached by image content, so the same image gets the same colors on every visit while the entry lasts. If you replace the image at a URL, visitors can see the old one until the entry expires; restart the app or set `Images:CacheMinutes` to `0` to avoid that. The cache is in memory and resets when the app restarts. Because the browser loads a downloaded image straight from its host, that host sees the visitor's request.
 Automated clients are turned away before that work starts. `/robots.txt` disallows every crawler, and every response sends `X-Robots-Tag: noindex, nofollow, noarchive`. `/generate` also refuses a missing or crawler user agent, a prefetch, and a cross-site embed (an image, iframe, or fetch from another site). A link click from another site is served.
 ## Cost
 Every accepted visit to `/generate` makes at least one Claude API call. A purpose with no image or color tools makes exactly one. One that uses tools makes about three (one to ask for the image, one to ask for its colors, one to write the page), and never more than `Claude:MaxToolRounds` + 1. The prompt asks for a short, simple page and responses are capped by `Claude:MaxTokens`.

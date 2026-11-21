@@ -31,6 +31,8 @@ public sealed class ImageOptions
     public int MaxBytes { get; set; } = 5_000_000;
     public int TimeoutSeconds { get; set; } = 10;
     public int MaxPerPage { get; set; } = 3;
+    public int CacheMinutes { get; set; } = 60;
+    public long CacheMaxBytes { get; set; } = 50_000_000;
 }
 
 public sealed class TrafficOptions

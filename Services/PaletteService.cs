@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using SkiaSharp;
 
@@ -8,11 +10,37 @@ public sealed class PaletteService(IOptions<AppOptions> options)
     private const int PixelSamples = 200;
     private const int BucketStep = 32;
     private const int MinColorDistance = 40;
+    private const int MaxCachedPalettes = 1000;
 
-    /// <summary>Samples random pixels and returns the most common (quantized) colors as hex strings.</summary>
+    private readonly MemoryCache _palettes = new(new MemoryCacheOptions { SizeLimit = MaxCachedPalettes });
+
+    /// <summary>
+    /// Samples random pixels and returns the most common (quantized) colors as hex strings. The result is cached
+    /// by image content, so the same image gets the same palette on every visit until the entry expires
+    /// (<c>Images:CacheMinutes</c>).
+    /// </summary>
     public IReadOnlyList<string> BuildPalette(byte[] imageBytes, int? count = null)
     {
         var wanted = Math.Max(1, count ?? options.Value.Palette.SampleCount);
+        var minutes = options.Value.Images.CacheMinutes;
+        if (minutes <= 0)
+            return Sample(imageBytes, wanted);
+
+        var key = $"{Convert.ToHexString(SHA256.HashData(imageBytes))}:{wanted}";
+        if (_palettes.TryGetValue(key, out IReadOnlyList<string>? cached) && cached is not null)
+            return cached;
+
+        var palette = Sample(imageBytes, wanted);
+        _palettes.Set(key, palette, new MemoryCacheEntryOptions
+        {
+            Size = 1,
+            AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(minutes)
+        });
+        return palette;
+    }
+
+    private static IReadOnlyList<string> Sample(byte[] imageBytes, int wanted)
+    {
 
         using var image = SKBitmap.Decode(imageBytes)
             ?? throw new InvalidOperationException("Could not decode the downloaded image.");
