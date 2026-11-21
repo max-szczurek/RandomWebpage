@@ -9,7 +9,7 @@ namespace RandomWebpage;
 /// </summary>
 public static class LoadingPage
 {
-    public const string ImageSources = "https://picsum.photos https://*.picsum.photos data:";
+    public const string ImageSources = "'self' https://picsum.photos https://*.picsum.photos data:";
 
     public static IResult Render(HttpContext context)
     {
@@ -27,6 +27,7 @@ public static class LoadingPage
               <meta charset="utf-8">
               <meta name="viewport" content="width=device-width, initial-scale=1">
               <title>Generating a random website...</title>
+              <link rel="icon" href="/favicon.ico">
               <style>
                 html, body { height: 100%; margin: 0; }
                 body { display: flex; flex-direction: column; align-items: center; justify-content: center;

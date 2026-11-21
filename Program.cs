@@ -34,6 +34,13 @@ var app = builder.Build();
 
 app.MapGet("/", LoadingPage.Render);
 
+var faviconPath = Path.Combine(app.Environment.ContentRootPath, "favicon.ico");
+app.MapGet("/favicon.ico", (HttpContext context) =>
+{
+    context.Response.Headers.CacheControl = "public, max-age=86400";
+    return Results.File(faviconPath, "image/x-icon");
+});
+
 app.MapGet("/generate", async (
     PicsumImageService picsum,
     PaletteService paletteService,
